@@ -1,27 +1,31 @@
 application:
     build: code
     volumes:
-        - ./symfony:/var/www/symfony
-        - ./logs/symfony:/var/www/symfony/app/logs
+        - /var/www:/var/www
     tty: true
+
 db:
     image: mysql
     ports:
         - 3306:3306
     environment:
         MYSQL_ROOT_PASSWORD: root
-        MYSQL_DATABASE: symfony
-        MYSQL_USER: root
-        MYSQL_PASSWORD: root
+
+redis:
+    image: redis
+    command: 'redis-server --appendonly yes'
+    volumes:
+        - /var/www/redis:/var/lib/redis
+
 php:
-    build: php-fpm
-    ports:
-        - 9000:9000
+    build: php-7-fpm
     volumes_from:
         - application
     links:
         - db
-nginx:
+        - redis
+
+nginx-symfony.dev:
     build: nginx
     ports:
         - 80:80
@@ -30,15 +34,23 @@ nginx:
     volumes_from:
         - application
     volumes:
-        - ./logs/nginx/:/var/log/nginx
-elk:
-    image: willdurand/elk
+        - ./logs/nginx/symfony.dev/:/var/log/nginx
+    environment:
+        NGINX_SERVER_NAME: symfony.dev
+        NGINX_DOCUMENT_ROOT: /var/www/symfony/web
+        NGINX_INDEX_FILE: app.php
+
+nginx-test.dev:
+    build: nginx
     ports:
         - 81:80
-    volumes:
-        - ./elk/logstash:/etc/logstash
-        - ./elk/logstash/patterns:/opt/logstash/patterns
+    links:
+        - php
     volumes_from:
         - application
-        - php
-        - nginx
+    volumes:
+        - ./logs/nginx/test.dev/:/var/log/nginx
+    environment:
+        NGINX_SERVER_NAME: test.dev
+        NGINX_DOCUMENT_ROOT: /var/www/test/web
+        NGINX_INDEX_FILE: index.php
